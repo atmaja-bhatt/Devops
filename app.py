@@ -47,7 +47,7 @@ def insecure_hash(data):
 # Hardcoded sensitive information
 def connect_to_db():
     connection_string = "server=example.com;database=example;uid=admin;pwd=secret"  # Hardcoded credentials
-    print("Connecting to database...")  # Just a demo, not actually connecting
+    print("Connecting to database...")
 
 # Function with a catch-all exception handler
 def divide_numbers(a, b):
