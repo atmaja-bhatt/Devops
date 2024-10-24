@@ -1,0 +1,31 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.x"
+
+      - name: Install SonarCloud Scanner
+        run: npm install -g sonarqube-scanner
+
+      - name: Run SonarCloud Scan
+        run: |
+          sonarqube-scanner \
+            -Dsonar.projectKey=atmaja-bhatt_Devops \
+            -Dsonar.organization=atmaja-bhatt \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
