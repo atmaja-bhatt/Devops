@@ -1,0 +1,727 @@
+Integrate a basic Python project into SonarCloud and analyze its code
+quality. Configure the project to show issues like code smells, bugs, and
+security vulnerabilities.
+
+Sonarcloud
+create new folder in vs
+create python file
+
+def greet(name):
+    return f"Hello, {name}!"
+
+print(greet("World"))
+
+-> git init
+-> git add hello.py
+-> git commit -m "Initial commit" 
+
+create new repo on GitHub
+copy url
+-> git branch -M main
+-> git remote add origin <>
+-> git push -u origin main
+
+login on sonar cloud
+click on + button, analyse new project. link the git repo
+Generate a Token:
+Go to SonarCloud.
+In the top right corner, click on your user profile and choose My Account.
+Navigate to Security on the left menu.
+Scroll down to the Tokens section and click Generate Token.
+Copy the generated token
+
+go to project -> information -> copy project key and organization key
+go to vs->
+->mkdir .github\workflows
+create new file - sonarcloud.yml
+
+name: Build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  sonarcloud:
+    name: SonarQube Cloud
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
+go to git repo (sonarcloud)
+
+settings->
+secrets and variables-> actions -> new repo secret -> name =SONAR_TOKEN - paste copied
+token
+in vs code-> new file -> sonar-project.properties
+
+# Project identification
+sonar.projectKey=
+sonar.organization=
+sonar.host.url=https://sonarcloud.io
+sonar.login=
+
+# Project details
+sonar.projectName=Python SonarCloud Demo
+sonar.projectVersion=1.0
+
+# Source file settings
+sonar.sources=.
+sonar.language=py
+
+
+Go to sonarcloud project -> administration -> analysis method -> toggle automatic analysis
+off
+-> git add .
+->git commit -m "Add SonarCloud configuration and workflow2
+->git push origin main
+-> git status
+go to GitHub and check actions tab -> workflow should be running
+go to sonarcloud dashboard and check quality gate.
+to get all parameters, try diff code:
+
+import os
+
+# 1. Hardcoded credentials and printing sensitive data
+def connect_to_db():
+    username = "root"  # Hardcoded credentials
+    password = "12345"  # Hardcoded password
+    print(f"Connecting to database with username: {username} and password: {password}")  # Exposing credentials
+    # Simulating a bad connection (e.g., missing actual connection logic)
+
+# 2. SQL Injection vulnerability and concatenation of user input
+def unsafe_query(user_input):
+    query = "SELECT * FROM users WHERE name = '" + user_input + "';"  # Vulnerable to SQL Injection
+    print("Executing query: " + query)  # Directly logging the potentially dangerous query
+    # Executing without sanitizing or using prepared statements
+
+# 3. Path traversal vulnerability without validation
+def read_file(file_name):
+    if "../" in file_name:  # Extremely naive attempt at sanitization
+        print("Trying to block path traversal, but failing.")
+    with open(file_name, 'r') as file:  # Potential path traversal issue
+        data = file.read()
+        print("File content: " + data)  # Printing file content unsafely
+
+# 4. Use of insecure hashing algorithm and poor error handling
+def hash_password(password):
+    import hashlib
+    try:
+        hashed = hashlib.md5(password.encode()).hexdigest()  # Using MD5 (insecure)
+        print("MD5 hash of password: " + hashed)
+    except:
+        print("Something went wrong while hashing, but I'm not telling you what!")
+
+# 5. Environment variables logging (security issue)
+def log_environment():
+    print("Listing all environment variables for fun and insecurity:")
+    for key, value in os.environ.items():
+        print(f"{key}: {value}")
+
+# 6. Unused imports and inefficient code
+import random
+for i in range(1000000):  # Inefficient loop doing nothing
+    pass
+
+if __name__ == "__main__":
+    connect_to_db()
+    unsafe_query("'; DROP TABLE users; --")
+    read_file("/etc/passwd")
+    hash_password("very_secure_password")
+    log_environment()
+
+-------------------------
+Write an Ansible playbook that installs Apache on a remote server and
+ensures the service is started.
+
+ansible-apache-docker/
+├── apache-server/
+│ ├── Dockerfile
+│ ├── index.html
+├── ansible/
+│ ├── Dockerfile
+│ └── playbook.yml
+├── docker-compose.yml
+
+
+(apache-server/Dockerfile)
+
+FROM ubuntu:20.04
+
+# Minimize layer creation and reduce build time
+RUN set -xe \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        apache2 \
+        openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir /var/run/sshd \
+    && echo 'root:password' | chpasswd \
+    && sed -i 's/^PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Expose Apache and SSH ports
+EXPOSE 80 22
+
+# Create a basic index.html for Apache
+COPY index.html /var/www/html/index.html
+
+# Start SSH and Apache in the background and keep the container running
+CMD service ssh start && apache2ctl -D FOREGROUND
+
+
+(apache-server/index.html)
+
+<!-- apache-server/index.html -->
+<html>
+  <head>
+    <title>Apache Server</title>
+  </head>
+  <body>
+    <h1>Welcome to Apache!</h1>
+  </body>
+</html>
+
+(ansible/playbook.yml)
+# ansible/playbook.yml
+---
+- name: Install Apache and ensure it is running
+  hosts: apache-server
+  become: true
+  tasks:
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Start Apache service
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+
+(ansible/Dockerfile)
+# ansible/Dockerfile
+FROM ubuntu:20.04
+
+# Install Ansible and SSH client for remote communication
+RUN apt-get update && \
+    apt-get install -y ansible sshpass python3-pip && \
+    apt-get clean
+
+# Install necessary Ansible dependencies
+RUN pip3 install ansible
+
+# Set working directory
+WORKDIR /ansible
+
+# Copy the playbook and inventory into the container
+COPY playbook.yml /ansible/playbook.yml
+
+# Entry point for Ansible to run the playbook
+CMD ["ansible-playbook", "/ansible/playbook.yml", "-i", "inventory"]
+
+
+(docker-compose.yml)
+# docker-compose.yml
+version: "3.8"
+
+services:
+  apache-server:
+    build: ./apache-server
+    container_name: apache-server
+    ports:
+      - "8082:80"
+    networks:
+      - app-network
+
+  ansible:
+    build: ./ansible
+    container_name: ansible-container
+    depends_on:
+      - apache-server
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+
+Set Up Ansible Inventory
+ansible/inventory
+
+[apache-server]
+apache-server ansible_host=apache-server ansible_port=22
+
+[apache-server:vars]
+ansible_ssh_user=root
+ansible_ssh_pass=password
+
+
+docker-compose build apache-server
+docker-compose build ansible
+docker-compose up -d
+docker-compose run --rm ansible
+
+This will run the playbook and install Apache inside the apache-server container. The apacheserver will also be started, and you can access it by navigating to http://localhost:8080 in your
+browser.
+Visit http://localhost:8082 in your browser. If everything was set up correctly, you should see the
+"Welcome to Apache!" message served by the Apache web server running inside a Docker
+container
+
+
+----------------------------------------------------
+terraform
+Write a Terraform configuration to create a local Docker container
+running Nginx. The container should be created using the Docker
+provider in Terraform.
+
+1.	Open Terminal or Command Prompt:
+•	On Windows, you can open Command Prompt or PowerShell.
+2.	Run the Command: Simply enter the following command in your terminal or command prompt to pull the Terraform Docker image:
+docker pull hashicorp/terraform 
+This command pulls the Terraform Docker image from DockerHub to your local machine, allowing you to run Terraform inside a Docker container.
+3.	Create a Local Directory for Terraform Configuration: Create a directory to store your Terraform configuration files, which you’ll map to the Docker container.
+mkdir terraform-nginx 
+cd terraform-nginx
+4.	Write the Terraform Configuration: Create a file named main.tf inside your terraform-nginx directory with the following content:
+
+# Specify required providers
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 2.15"
+    }
+  }
+}
+
+# Configure the Docker provider
+provider "docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+# Pull Nginx image from DockerHub
+resource "docker_image" "nginx" {
+  name         = "nginx:latest"
+  keep_locally = false
+}
+
+# Create an Nginx container
+resource "docker_container" "nginx" {
+  image = docker_image.nginx.latest
+  name  = "nginx_terraform"
+  ports {
+    internal = 80
+    external = 8083
+  }
+}
+
+Explanation:
+The required_providers block tells Terraform where to get the docker provider and what version to use.
+The provider block contains only the host argument to point Terraform to the Docker daemon running on your local machine.
+5.	Run Docker with the Mounted Directory: Now run the Terraform container with your local directory mounted. This way, Terraform will have access to your configuration files and Docker.
+docker run -v C:/Users/ayush/Desktop/Devops:/app -w /app -v/var/run/docker.sock:/var/run/docker.sock hashicorp/terraform init
+6.	Apply the Terraform Configuration: After initialization, apply the configuration to create the Nginx container:
+docker run -v C:/Users/ayush/Desktop/Devops:/app -w /app -v //var/run/docker.sock:/var/run/docker.sock hashicorp/terraform apply -auto-approve
+7.	Access Nginx:
+Once the container is running, open your browser and go to http://localhost:8083. You should see the Nginx welcome page.
+8.	Clean Up: To destroy the container created by Terraform.
+docker run -v C:/Users/ayush/Desktop/Devops:/app -w /app -v //var/run/docker.sock:/var/run/docker.sock hashicorp/terraform destroy -auto-approve
+9. and the reload the localhost site. it should be unreachable.
+
+----------------------------------------
+
+Scale a running Kubernetes deployment from 2 replicas to 5 replicas, and verify that the scaling
+was successful. i want to perform everything through docker give me steps and code
+I don't have any project ready. Give me all the steps from scratch
+Make sure Rancher is up and running
+Create folder my-k8s-app
+Inside the folder, create server.js
+
+const express = require('express');
+const app = express();
+const port = 3000;
+
+app.get('/', (req, res) => {
+  res.send('Hello, Kubernetes!');
+});
+
+app.listen(port, () => {
+  console.log(`App running on port ${port}`);
+});
+
+npm init -y
+npm install express
+This will create package.json file in the pwd
+node server.js
+Open your browser and visit http://localhost:3000. You should see "Hello, Kubernetes!".
+
+Create a Dockerfile in the root of your project folder (my-k8s-app):
+# Use an official Node.js runtime as a parent image
+FROM node:14
+
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy the current directory contents into the container
+COPY . .
+
+# Install dependencies
+RUN npm install
+
+# Make the app available on port 3000
+EXPOSE 3000
+
+# Define the command to run the app
+CMD ["node", "server.js"]
+
+Build the Docker image: Run the following command to build your Docker image:
+docker build -t my-k8s-app:latest .
+Run the Docker container locally to test the image:
+docker run -p 3000:3000 my-k8s-app:latest
+Visit http://localhost:3000 in your browser to verify the app is running.
+Log in to Docker Hub (or your preferred registry):
+docker login
+Tag your image for Docker Hub:
+docker tag my-k8s-app:latest <your-docker-username>/my-k8s-app:latest
+Push the image to Docker Hub:
+docker push <your-docker-username>/my-k8s-app:latest
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-k8s-app-deployment
+spec:
+  replicas: 2  # Initial replica count
+  selector:
+    matchLabels:
+      app: my-k8s-app
+  template:
+    metadata:
+      labels:
+        app: my-k8s-app
+    spec:
+      containers:
+      - name: my-k8s-app
+        image: chiragbhatia7/my-k8s-app:latest
+        ports:
+        - containerPort: 3000
+
+kubectl apply -f deployment.yaml
+
+service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-k8s-app-service
+spec:
+  selector:
+    app: my-k8s-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer  # This exposes the service outside the cluster
+
+kubectl apply -f service.yaml
+
+Get the external IP (if you're using a cloud provider): You can get the external IP of the service
+by running:
+kubectl get svc my-k8s-app-service
+kubectl get pods
+Scale the deployment from 2 replicas to 5 replicas: You can scale the deployment using the
+following command:
+kubectl scale deployment my-k8s-app-deployment --replicas=5
+kubectl get pods
+
+Do port forwarding in rancher
+Visit url, you will see output
+Clean Up (Optional)
+If you no longer need the deployment and service, you can delete them:
+kubectl delete deployment my-k8s-app-deployment
+kubectl delete service my-k8s-app-service
+
+for running in docker-
+kubectl config current-context rancher-desktop
+kubectl config get-contexts
+kubectl config use-context docker-desktop
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+
+
+------------------------------------------------------------
+or Kubernetes:
+Index.html
+
+# Use the official Nginx image
+FROM nginx:alpine
+# Copy the index.html to the appropriate directory in the container
+COPY index.html /usr/share/nginx/html/index.html
+# Expose port 80 to access the web page
+EXPOSE 80
+
+DockerFile
+# Use the official Nginx image
+FROM nginx:alpine
+# Copy the index.html to the appropriate directory in the container
+COPY index.html /usr/share/nginx/html/index.html
+# Expose port 80 to access the web page
+EXPOSE 80
+
+DEPLOYMENT.YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment2
+spec:
+  replicas: 2 # Initial number of replicas
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: vaibhav1502/custom-depo:latest # Replace with your Docker image name
+          ports:
+            - containerPort: 80
+
+
+SERVICE.YAML
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service2
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80 # Exposing port 80
+      targetPort: 80 # Inside the container
+  type: NodePort # Or you can use NodePort if LoadBalancer isn't available
+
+Docker Login - cmd
+-> docker login
+->docker build -t imgname .
+->docker tag imgname dockerusername/imgname:latest
+->docker push dockerusername/imgname:latest
+
+->kubectl apply -f deployment.yaml
+->kubectl apply -f service.yaml
+->kubectl get deployments
+->kubectl scale deployment nginx-deployment2 --replicas=5
+->kubectl get deployments
+->kubectl get services
+
+go to localhost 
+nginx-service2 : localhost:31593
+
+--------------------------------------------------------------
+1. Docker installation
+2. Open VS code 
+3. Sign in to github.com and create repo 
+4. clone repo on vs code
+5. Create a basic python website in streamlit
+   - Create virtual env
+      - pip install virtualenv
+      - python -m venv myenv
+      - myenv/Scripts/activate 
+      - pip install streamlit 
+      - create a file named main.py inside same folder as myenv
+        NOT INSIDE myenv  with code
+                  import streamlit as st
+                  st.title('Hello world')
+6. Execute and see output TYPE IN TERMINAL --->>> streamlit run main.py
+7. Sign in to docker hub
+8. Go to VS Code and Create a file named Dockerfile (IN SAME FOLDER AS main.py)
+   - Create another file in VS Code same folder as main.py named
+     requirements.txt
+      Inside the requirements.txt write
+      
+       streamlit==VERSION_NUMBER_WRITE_HERE
+      
+       For example streamlit==1.37.2
+    TO CHECK STREAMLIT VERSION TYPE IN TERMINAL streamlit --version
+9. Inside Dockerfile write
+
+	FROM python:3
+        WORKDIR /app
+	COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY . .
+        EXPOSE 8051
+        CMD ["streamlit","run","main.py"] 
+
+10. Build docker image TYPE IN TERMINAL 
+     docker build -t your_dockerhub_username/your_image_name:tag .
+where 
+	your_dockerhub_username - username
+        your_image_name         - any name or text
+        tag	                - v1.0 
+11. RUN THE CONTAINER FROM THE DOCKER IMAGE
+    docker run -p 8501:8501 your_dockerhub_username/your_image_name:tag
+12 docker login
+13 docker push your_dockerhub_username/your_image_name:tag
+
+--------------------------------------------------------------
+Jenkins: Congure Jenkins to deploy a Docker container running Nginx to a local
+Docker host. The pipeline should build the Docker image and start the
+container
+
+Steps to Configure Jenkins to Deploy Nginx Using Docker on Windows
+
+---
+
+### Step 1: Install Jenkins
+1. **Download Jenkins**:
+   - Download the Jenkins Windows installer from https://www.jenkins.io/download/.
+   - Run the installer and follow the setup instructions.
+
+2. **Unlock Jenkins**:
+   - Open the `initialAdminPassword` file located at:
+     C:\Program Files (x86)\Jenkins\secrets\initialAdminPassword
+   - Paste the password into Jenkins.
+
+3. **Install Plugins**:
+   - Install recommended plugins during the setup wizard.
+
+4. **Create an Admin User**:
+   - Create an admin account as part of the initial setup.
+
+---
+
+### Step 2: Install and Configure Docker
+1. **Install Docker Desktop for Windows**:
+   - Download and install Docker Desktop from https://www.docker.com/products/docker-desktop.
+   - Enable WSL 2 during installation (if not already installed).
+
+2. **Start Docker Desktop**:
+   - Ensure Docker Desktop is running and confirm it's operational:
+     ```cmd
+     docker --version
+     ```
+
+3. **Allow Jenkins to Use Docker**:
+   - Run these commands in a PowerShell or Command Prompt with admin privileges:
+     ```cmd
+     net localgroup docker-users <your-windows-username> /add
+     ```
+   - Restart your computer.
+
+---
+
+### Step 3: Set Up a Simple Project
+1. **Create a Directory**:
+   ```cmd
+   mkdir jenkins-docker-nginx
+   cd jenkins-docker-nginx
+   ```
+
+2. **Create a `Dockerfile`**:
+   ```dockerfile
+   FROM nginx:latest
+   COPY index.html /usr/share/nginx/html
+   ```
+
+3. **Create an `index.html` File**:
+   ```html
+   <!DOCTYPE html>
+   <html>
+   <head>
+       <title>Welcome to Nginx</title>
+   </head>
+   <body>
+       <h1>Deployed using Jenkins and Docker on Windows!</h1>
+   </body>
+   </html>
+   ```
+
+4. **Initialize a Git Repository**:
+   ```cmd
+   git init
+   git add .
+   git commit -m "Initial commit"
+   ```
+
+---
+
+### Step 4: Configure Jenkins Pipeline
+1. **Create a New Pipeline Job**:
+   - Go to Jenkins -> New Item -> Select Pipeline.
+   - Name the job `Deploy-Nginx`.
+
+2. **Add Pipeline Script**:
+   ```groovy
+   pipeline {
+       agent any
+       stages {
+           stage('Clone Repository') {
+               steps {
+                   git branch: 'main', url: 'https://<your-repository-url>.git'
+               }
+           }
+           stage('Build Docker Image') {
+               steps {
+                   bat 'docker build -t nginx-jenkins .'
+               }
+           }
+           stage('Run Docker Container') {
+               steps {
+                   bat '''
+                   docker stop nginx-container || exit 0
+                   docker rm nginx-container || exit 0
+                   docker run -d --name nginx-container -p 8080:80 nginx-jenkins
+                   '''
+               }
+           }
+       }
+   }
+   ```
+
+3. **Save and Apply the Configuration**.
+
+---
+
+### Step 5: Run the Jenkins Pipeline
+1. Go to the Jenkins job dashboard and click Build Now.
+2. Monitor the console output for errors.
+3. Once complete, open a browser and navigate to http://localhost:8080 to verify the Nginx deployment.
+
+---
+
+### Step 6: Test and Verify
+1. **Check Running Containers**:
+   ```cmd
+   docker ps
+   ```
+
+2. **View Logs**:
+   ```cmd
+   docker logs nginx-container
+   ```
+
+3. **Stop and Remove Containers (if needed)**:
+   ```cmd
+   docker stop nginx-container
+   docker rm nginx-container
+   ```
+
+---
+
+### Notes for Windows Users
+- Ensure Docker Desktop is running before executing Docker commands.
+- The `bat` directive in the Jenkins Pipeline script is used for Windows batch commands.
